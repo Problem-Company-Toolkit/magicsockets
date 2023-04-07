@@ -43,12 +43,12 @@ type magicSocket struct {
 	port   int
 }
 
-type SocketOpts struct {
+type MagicSocketOpts struct {
 	OnConnect onConnectFunc
 	Port      int
 }
 
-func New(opts SocketOpts) MagicSocket {
+func New(opts MagicSocketOpts) MagicSocket {
 	return &magicSocket{
 		clients:   make(map[string]clientConn),
 		onConnect: opts.OnConnect,

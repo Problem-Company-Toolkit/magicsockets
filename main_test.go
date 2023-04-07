@@ -11,7 +11,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"github.com/problem-company/magicsocket"
+	"github.com/problem-company-toolkit/magicsocket"
 )
 
 var _ = Describe("Main", func() {
@@ -27,7 +27,7 @@ var _ = Describe("Main", func() {
 		// Very unlikely to be allocated or to conflict in parallel tests.
 		randomPort := gofakeit.IntRange(10000, 30000)
 		address = fmt.Sprintf("0.0.0.0:%d", randomPort)
-		ms = magicsocket.New(magicsocket.SocketOpts{
+		ms = magicsocket.New(magicsocket.MagicSocketOpts{
 			Port: randomPort,
 		})
 

@@ -1,4 +1,4 @@
-module github.com/problem-company/magicsocket
+module github.com/problem-company-toolkit/magicsocket
 
 go 1.19
 

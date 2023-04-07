@@ -22,7 +22,7 @@ MagicSocket offers the following features:
 To begin, create a new MagicSocket instance:
 
 ```go
-import "github.com/problem-company/magicsocket"
+import "github.com/problem-company-toolkit/magicsocket"
 
 socket := magicsocket.New(magicsocket.SocketOpts{
     Port: 8080,
