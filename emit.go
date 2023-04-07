@@ -1,9 +1,7 @@
 package magicsockets
 
 import (
-	"encoding/json"
-	"log"
-
+	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 	"go.uber.org/zap"
 )
@@ -17,15 +15,9 @@ type EmitRule struct {
 	Topics []string
 }
 
-func (ms *magicSocket) Emit(opts EmitOpts, message interface{}) {
+func (ms *magicSocket) Emit(opts EmitOpts, message []byte) {
 	ms.Lock()
 	defer ms.Unlock()
-
-	messageBytes, err := json.Marshal(message)
-	if err != nil {
-		log.Println("JSON marshal error:", err)
-		return
-	}
 
 	targets := ms.clients
 
@@ -44,12 +36,21 @@ func (ms *magicSocket) Emit(opts EmitOpts, message interface{}) {
 		client := ms.clients[k]
 		go func() {
 			messageType := websocket.TextMessage
-			err := client.conn.WriteMessage(messageType, messageBytes)
+
+			logger := ms.logger.With(
+				zap.String("Client Key", client.key),
+				zap.String("Message ID", uuid.New().String()),
+				zap.Int("Message Type", messageType),
+			)
+
+			logger.Info("Emitting message")
+
+			err := client.conn.WriteMessage(messageType, message)
 			if err != nil {
 				logger.Error("Send message to client error", zap.Error(err))
 			}
 			if client.onOutgoing != nil {
-				if err := client.onOutgoing(messageType, messageBytes); err != nil {
+				if err := client.onOutgoing(messageType, message); err != nil {
 					logger.Error("onOutgoing error", zap.Error(err))
 				}
 			}

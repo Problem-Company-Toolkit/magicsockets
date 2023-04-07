@@ -11,16 +11,12 @@ import (
 	"go.uber.org/zap"
 )
 
-var (
-	logger, _ = zap.NewDevelopment()
-)
-
 type (
 	onConnectFunc = func(*http.Request) (RegisterClientOpts, error)
 )
 
 type MagicSocket interface {
-	Emit(opts EmitOpts, message interface{})
+	Emit(opts EmitOpts, message []byte)
 	GetClients() map[string]ClientConn
 
 	SetOnConnect(onConnectFunc)
@@ -34,6 +30,7 @@ type MagicSocket interface {
 }
 
 type magicSocket struct {
+	logger *zap.Logger
 	sync.Mutex
 	clients map[string]clientConn
 
@@ -49,7 +46,13 @@ type MagicSocketOpts struct {
 }
 
 func New(opts MagicSocketOpts) MagicSocket {
+	logger, _ := zap.NewDevelopment()
+	logger = logger.With(
+		zap.String("MagicSocket ID", uuid.NewString()),
+	)
+
 	return &magicSocket{
+		logger:    logger,
 		clients:   make(map[string]clientConn),
 		onConnect: opts.OnConnect,
 		port:      opts.Port,
@@ -93,7 +96,7 @@ func (ms *magicSocket) startOutgoingMessagesChannel(key string, opts RegisterCli
 		_, _, err := conn.ReadMessage()
 		if err != nil {
 			if strings.Contains(err.Error(), "close 1006") {
-				// logger.Debug(
+				// ms.logger.Debug(
 				// 	"Connection closed unexpectedly",
 				// 	zap.Int("Code", 1006),
 				// 	zap.Error(err),
@@ -103,7 +106,7 @@ func (ms *magicSocket) startOutgoingMessagesChannel(key string, opts RegisterCli
 			} else if strings.Contains(err.Error(), "reset by peer") {
 
 			} else {
-				logger.Error("Read Error", zap.Error(err))
+				ms.logger.Error("Read Error", zap.Error(err))
 			}
 			break
 		}
@@ -124,7 +127,7 @@ func (ms *magicSocket) startIncomingMessagesChannel(key string, opts RegisterCli
 		messageType, message, err := conn.ReadMessage()
 		if err != nil {
 			if strings.Contains(err.Error(), "close 1006") {
-				// logger.Debug(
+				// ms.logger.Debug(
 				// 	"Connection closed unexpectedly",
 				// 	zap.Int("Code", 1006),
 				// 	zap.Error(err),
@@ -132,14 +135,14 @@ func (ms *magicSocket) startIncomingMessagesChannel(key string, opts RegisterCli
 			} else if strings.Contains(err.Error(), "reset by peer") {
 
 			} else {
-				logger.Error("Write Error", zap.Error(err))
+				ms.logger.Error("Write Error", zap.Error(err))
 			}
 			break
 		}
 
 		if client.onIncoming != nil {
 			if err := client.onIncoming(messageType, message); err != nil {
-				logger.Error("client onIncoming error", zap.Error(err))
+				ms.logger.Error("client onIncoming error", zap.Error(err))
 			}
 		}
 
@@ -165,19 +168,19 @@ func (ms *magicSocket) Start() error {
 				return
 			}
 			if err := ms.registerClient(w, r, opts); err != nil {
-				logger.Panic(err.Error())
+				ms.logger.Panic(err.Error())
 			}
 		} else {
 			if err := ms.registerClient(w, r, RegisterClientOpts{
 				Key: uuid.NewString(),
 			}); err != nil {
-				logger.Panic(err.Error())
+				ms.logger.Panic(err.Error())
 			}
 		}
 	})
 	ms.server.Handler = mux
 
-	logger.Info("Starting MagicSocket websockets server", zap.Int("Port", ms.GetPort()))
+	ms.logger.Info("Starting MagicSocket websockets server", zap.Int("Port", ms.GetPort()))
 	err := ms.server.ListenAndServe()
 	// We consider this to be a successful exit.
 	if err == http.ErrServerClosed {
