@@ -1,4 +1,4 @@
-package magicsocket_test
+package magicsockets_test
 
 import (
 	"net/url"
@@ -27,10 +27,10 @@ var (
 	}()
 )
 
-func TestMagicsocket(t *testing.T) {
+func TestMagicsockets(t *testing.T) {
 	RegisterFailHandler(Fail)
 	SetDefaultEventuallyTimeout(EVENTUALLY_TIMEOUT)
-	RunSpecs(t, "Magicsocket Suite")
+	RunSpecs(t, "Magicsockets Suite")
 }
 
 func newTestClient(address string) (*websocket.Conn, error) {

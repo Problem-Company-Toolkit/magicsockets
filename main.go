@@ -1,4 +1,4 @@
-package magicsocket
+package magicsockets
 
 import (
 	"fmt"

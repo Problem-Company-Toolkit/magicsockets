@@ -1,4 +1,4 @@
-module github.com/problem-company-toolkit/magicsocket
+module github.com/problem-company-toolkit/magicsockets
 
 go 1.19
 
@@ -9,6 +9,7 @@ require (
 	github.com/onsi/ginkgo/v2 v2.9.2
 	github.com/onsi/gomega v1.27.6
 	go.uber.org/zap v1.24.0
+	gorm.io/gorm v1.24.6
 )
 
 require (

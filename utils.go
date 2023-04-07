@@ -1,4 +1,4 @@
-package magicsocket
+package magicsockets
 
 func contains(slice []string, item string) bool {
 	for _, s := range slice {

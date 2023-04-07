@@ -24,7 +24,7 @@ To begin, create a new MagicSocket instance:
 ```go
 import "github.com/problem-company-toolkit/magicsocket"
 
-socket := magicsocket.New(magicsocket.SocketOpts{
+socket := magicsockets.New(magicsockets.SocketOpts{
     Port: 8080,
 })
 ```
@@ -34,12 +34,12 @@ socket := magicsocket.New(magicsocket.SocketOpts{
 Register clients with MagicSocket using the `OnConnect` callback, which is called whenever a new client connects:
 
 ```go
-socket := magicsocket.New(magicsocket.SocketOpts{
+socket := magicsockets.New(magicsockets.SocketOpts{
     Port: 8080,
-    OnConnect: func(r *http.Request) (magicsocket.RegisterClientOpts, error) {
+    OnConnect: func(r *http.Request) (magicsockets.RegisterClientOpts, error) {
         // Perform any authentication or validation here.
 
-        return magicsocket.RegisterClientOpts{
+        return magicsockets.RegisterClientOpts{
             Key: "client-key", // Unique key to identify the client
             Topics: []string{"topic1", "topic2"}, // Topics the client is interested in
         }, nil
@@ -52,8 +52,8 @@ socket := magicsocket.New(magicsocket.SocketOpts{
 Send messages to clients by emitting events on specific topics:
 
 ```go
-socket.Emit(magicsocket.EmitOpts{
-    Rules: []magicsocket.EmitRule{
+socket.Emit(magicsockets.EmitOpts{
+    Rules: []magicsockets.EmitRule{
         {
             Topics: []string{"topic1"},
             Key:    "client-key",
@@ -67,12 +67,12 @@ socket.Emit(magicsocket.EmitOpts{
 Handle incoming messages from clients using the `OnIncoming` callback:
 
 ```go
-socket := magicsocket.New(magicsocket.SocketOpts{
+socket := magicsockets.New(magicsockets.SocketOpts{
     Port: 8080,
-    OnConnect: func(r *http.Request) (magicsocket.RegisterClientOpts, error) {
+    OnConnect: func(r *http.Request) (magicsockets.RegisterClientOpts, error) {
         // Perform any authentication or validation here.
 
-        return magicsocket.RegisterClientOpts{
+        return magicsockets.RegisterClientOpts{
             Key: "client-key", // Unique key to identify the client
             Topics: []string{"topic1", "topic2"}, // Topics the client is interested in
             OnIncoming: func(messageType int, data []byte) error {

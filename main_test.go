@@ -1,4 +1,4 @@
-package magicsocket_test
+package magicsockets_test
 
 import (
 	"fmt"
@@ -11,12 +11,12 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"github.com/problem-company-toolkit/magicsocket"
+	"github.com/problem-company-toolkit/magicsockets"
 )
 
 var _ = Describe("Main", func() {
 	var (
-		ms      magicsocket.MagicSocket
+		ms      magicsockets.MagicSocket
 		address string
 
 		key    string
@@ -27,7 +27,7 @@ var _ = Describe("Main", func() {
 		// Very unlikely to be allocated or to conflict in parallel tests.
 		randomPort := gofakeit.IntRange(10000, 30000)
 		address = fmt.Sprintf("0.0.0.0:%d", randomPort)
-		ms = magicsocket.New(magicsocket.MagicSocketOpts{
+		ms = magicsockets.New(magicsockets.MagicSocketOpts{
 			Port: randomPort,
 		})
 
@@ -54,8 +54,8 @@ var _ = Describe("Main", func() {
 	})
 
 	It("Registers a client connection with a specific key and topic", func() {
-		ms.SetOnConnect(func(r *http.Request) (magicsocket.RegisterClientOpts, error) {
-			return magicsocket.RegisterClientOpts{
+		ms.SetOnConnect(func(r *http.Request) (magicsockets.RegisterClientOpts, error) {
+			return magicsockets.RegisterClientOpts{
 				Key:    key,
 				Topics: topics,
 			}, nil
@@ -77,8 +77,8 @@ var _ = Describe("Main", func() {
 		outgoingTriggered := make(chan bool)
 
 		testMessage := "my test message 123"
-		ms.SetOnConnect(func(r *http.Request) (magicsocket.RegisterClientOpts, error) {
-			return magicsocket.RegisterClientOpts{
+		ms.SetOnConnect(func(r *http.Request) (magicsockets.RegisterClientOpts, error) {
+			return magicsockets.RegisterClientOpts{
 				Key:    key,
 				Topics: topics,
 				OnOutgoing: func(messageType int, data []byte) error {
@@ -91,8 +91,8 @@ var _ = Describe("Main", func() {
 		client, err := newTestClient(address)
 		Expect(err).ToNot(HaveOccurred())
 
-		ms.Emit(magicsocket.EmitOpts{
-			Rules: []magicsocket.EmitRule{
+		ms.Emit(magicsockets.EmitOpts{
+			Rules: []magicsockets.EmitRule{
 				{
 					Keys: []string{key},
 				},
@@ -107,8 +107,8 @@ var _ = Describe("Main", func() {
 	It("Triggers OnIncoming correctly", func() {
 		incomingTriggered := make(chan bool)
 
-		ms.SetOnConnect(func(r *http.Request) (magicsocket.RegisterClientOpts, error) {
-			return magicsocket.RegisterClientOpts{
+		ms.SetOnConnect(func(r *http.Request) (magicsockets.RegisterClientOpts, error) {
+			return magicsockets.RegisterClientOpts{
 				Key:    key,
 				Topics: topics,
 				OnIncoming: func(messageType int, data []byte) error {
