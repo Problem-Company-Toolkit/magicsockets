@@ -111,6 +111,30 @@ var _ = Describe("Main", func() {
 		Expect(clients[key].GetTopics()).To(BeEquivalentTo(topics))
 	})
 
+	It("Updates a client's topics", func() {
+		ms.SetOnConnect(func(r *http.Request) (magicsockets.RegisterClientOpts, error) {
+			return magicsockets.RegisterClientOpts{
+				Key:    key,
+				Topics: topics,
+			}, nil
+		})
+
+		client, err := newTestClient(address)
+		Expect(err).ToNot(HaveOccurred())
+
+		err = client.Close()
+		Expect(err).ShouldNot(HaveOccurred())
+
+		clients := ms.GetClients()
+		Expect(clients[key]).ToNot(BeNil())
+		Expect(clients[key].GetKey()).To(BeEquivalentTo(key))
+		Expect(clients[key].GetTopics()).To(BeEquivalentTo(topics))
+
+		newTopics := []string{gofakeit.BuzzWord(), gofakeit.BuzzWord(), gofakeit.BuzzWord(), gofakeit.BuzzWord()}
+		clients[key].UpdateTopics(newTopics)
+		Expect(clients[key].GetTopics()).To(BeEquivalentTo(newTopics))
+	})
+
 	It("Triggers OnOutgoing correctly", func() {
 		outgoingTriggered := make(chan bool)
 

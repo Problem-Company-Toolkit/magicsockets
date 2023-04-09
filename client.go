@@ -31,9 +31,13 @@ type RegisterClientOpts struct {
 type ClientConn interface {
 	WriteMessage(messageType int, data []byte) error
 	ReadMessage() (messageType int, p []byte, err error)
+
 	Close() error
+
 	GetKey() string
 	GetTopics() []string
+
+	UpdateTopics([]string)
 }
 
 func (ms *magicSocket) registerClient(w http.ResponseWriter, r *http.Request, opts RegisterClientOpts) error {
@@ -102,6 +106,10 @@ func (cc *clientConn) GetKey() string {
 
 func (cc *clientConn) GetTopics() []string {
 	return cc.topics
+}
+
+func (cc *clientConn) UpdateTopics(newTopics []string) {
+	cc.topics = newTopics
 }
 
 func (cc *clientConn) WriteMessage(messageType int, data []byte) error {
