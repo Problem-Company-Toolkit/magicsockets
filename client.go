@@ -2,6 +2,7 @@ package magicsockets
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 
 	"github.com/gorilla/websocket"
@@ -69,6 +70,27 @@ func (ms *magicSocket) registerClient(w http.ResponseWriter, r *http.Request, op
 
 	go ms.startOutgoingMessagesChannel(opts.Key, opts)
 	go ms.startIncomingMessagesChannel(opts.Key, opts)
+
+	return nil
+}
+
+func (ms *magicSocket) UpdateClientKey(key string, newKey string) error {
+	ms.Lock()
+	defer ms.Unlock()
+
+	client, ok := ms.clients[key]
+	if !ok {
+		return fmt.Errorf("no client with key %s", key)
+	}
+
+	_, ok = ms.clients[newKey]
+	if ok {
+		return fmt.Errorf("key %s already in use", key)
+	}
+
+	delete(ms.clients, key)
+	client.key = newKey
+	ms.clients[newKey] = client
 
 	return nil
 }

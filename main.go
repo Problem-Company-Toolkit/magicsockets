@@ -17,7 +17,9 @@ type (
 
 type MagicSocket interface {
 	Emit(opts EmitOpts, message []byte)
+
 	GetClients() map[string]ClientConn
+	UpdateClientKey(key string, newKey string) error
 
 	SetOnConnect(onConnectFunc)
 

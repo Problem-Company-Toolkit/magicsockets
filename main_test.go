@@ -53,6 +53,44 @@ var _ = Describe("Main", func() {
 		Expect(err).ShouldNot(HaveOccurred())
 	})
 
+	It("Updates a client key", func() {
+		ms.SetOnConnect(func(r *http.Request) (magicsockets.RegisterClientOpts, error) {
+			return magicsockets.RegisterClientOpts{
+				Key: key,
+			}, nil
+		})
+
+		client, err := newTestClient(address)
+		Expect(err).ToNot(HaveOccurred())
+
+		clients := ms.GetClients()
+		connectionClient, ok := clients[key]
+
+		Expect(ok).To(BeTrue())
+		Expect(connectionClient).ToNot(BeNil())
+		Expect(connectionClient.GetKey()).To(BeEquivalentTo(key))
+
+		newKey := gofakeit.UUID()
+		err = ms.UpdateClientKey(key, newKey)
+		Expect(err).ShouldNot(HaveOccurred())
+		Expect(connectionClient).ToNot(BeNil())
+
+		Expect(connectionClient.GetKey()).ToNot(BeEquivalentTo(newKey))
+
+		clients = ms.GetClients()
+		connectionClient, ok = clients[newKey]
+
+		Expect(ok).To(BeTrue())
+		Expect(connectionClient).ToNot(BeNil())
+		Expect(connectionClient.GetKey()).To(BeEquivalentTo(newKey))
+
+		_, ok = clients[key]
+		Expect(ok).To(BeFalse())
+
+		err = client.Close()
+		Expect(err).ShouldNot(HaveOccurred())
+	})
+
 	It("Registers a client connection with a specific key and topic", func() {
 		ms.SetOnConnect(func(r *http.Request) (magicsockets.RegisterClientOpts, error) {
 			return magicsockets.RegisterClientOpts{
