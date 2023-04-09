@@ -31,6 +31,7 @@ type RegisterClientOpts struct {
 type ClientConn interface {
 	WriteMessage(messageType int, data []byte) error
 	ReadMessage() (messageType int, p []byte, err error)
+	Close() error
 	GetKey() string
 	GetTopics() []string
 }
@@ -109,4 +110,8 @@ func (cc *clientConn) WriteMessage(messageType int, data []byte) error {
 
 func (cc *clientConn) ReadMessage() (messageType int, p []byte, err error) {
 	return cc.conn.ReadMessage()
+}
+
+func (cc *clientConn) Close() error {
+	return cc.conn.Close()
 }
