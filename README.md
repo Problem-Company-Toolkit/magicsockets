@@ -62,6 +62,12 @@ ms.Emit(magicsockets.EmitOpts{
 
 ### Registering a websocket connection
 
+MagicSockets allows you to set an `OnConnect` function, which handles how clients will be updated.
+
+You can update this hook function after the server has already started, but clients will not be updated retroactively.
+
+In this hook, you can define other hooks for when messages are received, sent, clients are connected, disconnected, etc.
+
 ```
 ms.SetOnConnect(func(r *http.Request) (magicsockets.RegisterClientOpts, error) {
 	return magicsockets.RegisterClientOpts{
@@ -95,10 +101,12 @@ client.UpdateKey("newClientKey")
 client.SetTopics([]string{"newTopic1", "newTopic2"})
 ```
 
-Example of where you might want to use this:
+Situations where you might want to use this:
 
-- Establishing one WebSocket connection per user. By manipulating the client key, you could set it to the user's ID once you receive an event that identifies the user.
-- You can further reuse the same connection if the user participates in other activities or stops participating within the same domain by simply updating the topics.
+- Establishing one WebSocket connection per user.
+    - By manipulating the client key, you could set it to the user's ID once you receive an event that identifies the user.
+- Subscribing or unsubscribing the user whenever they engage or stop certain activities within the same domain.
+    - This is particularly useful if you're using a PubSub solution. You can easily translate the concept of `topics` by simply syncing consuming events and producing events with your current messaging broker.
 
 ## Running tests
 
