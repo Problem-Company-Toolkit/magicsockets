@@ -21,6 +21,10 @@ var _ = Describe("Main", func() {
 
 		key    string
 		topics []string
+
+		websocketClientConn *websocket.Conn
+
+		err error
 	)
 
 	BeforeEach(func() {
@@ -43,13 +47,49 @@ var _ = Describe("Main", func() {
 			panic(err)
 		}
 		ms = nil
+
+		if websocketClientConn != nil {
+			websocketClientConn.Close()
+		}
 	})
 
 	It("Receives a websocket connection", func() {
-		client, err := newTestClient(address)
+		client, err := newWebsocketClientConn(address)
 		Expect(err).ToNot(HaveOccurred())
 
 		err = client.Close()
+		Expect(err).ShouldNot(HaveOccurred())
+	})
+
+	It("Sends a message", func() {
+		ms.SetOnConnect(func(r *http.Request) (magicsockets.RegisterClientOpts, error) {
+			return magicsockets.RegisterClientOpts{
+				Key: key,
+			}, nil
+		})
+
+		websocketClientConn, err = newWebsocketClientConn(address)
+		Expect(err).ToNot(HaveOccurred())
+
+		testMessage := gofakeit.BuzzWord()
+		messageChan := make(chan string)
+		go func() {
+			_, message, err := websocketClientConn.ReadMessage()
+			Expect(err).ShouldNot(HaveOccurred())
+
+			messageChan <- string(message)
+		}()
+
+		ms.Emit(magicsockets.EmitOpts{
+			Rules: []magicsockets.EmitRule{
+				{
+					Keys: []string{key},
+				},
+			},
+		}, []byte(testMessage))
+
+		Eventually(messageChan).Should(Receive(&testMessage))
+		err = websocketClientConn.Close()
 		Expect(err).ShouldNot(HaveOccurred())
 	})
 
@@ -60,7 +100,7 @@ var _ = Describe("Main", func() {
 			}, nil
 		})
 
-		client, err := newTestClient(address)
+		websocketClientConn, err = newWebsocketClientConn(address)
 		Expect(err).ToNot(HaveOccurred())
 
 		clients := ms.GetClients()
@@ -71,24 +111,41 @@ var _ = Describe("Main", func() {
 		Expect(connectionClient.GetKey()).To(BeEquivalentTo(key))
 
 		newKey := gofakeit.UUID()
-		err = ms.UpdateClientKey(key, newKey)
+		err = connectionClient.UpdateKey(newKey)
 		Expect(err).ShouldNot(HaveOccurred())
 		Expect(connectionClient).ToNot(BeNil())
 
-		Expect(connectionClient.GetKey()).ToNot(BeEquivalentTo(newKey))
+		Expect(connectionClient.GetKey()).To(BeEquivalentTo(newKey))
 
 		clients = ms.GetClients()
+
 		connectionClient, ok = clients[newKey]
 
 		Expect(ok).To(BeTrue())
 		Expect(connectionClient).ToNot(BeNil())
 		Expect(connectionClient.GetKey()).To(BeEquivalentTo(newKey))
 
-		_, ok = clients[key]
-		Expect(ok).To(BeFalse())
+		testMessage := gofakeit.BuzzWord()
+		messageChan := make(chan string)
+		go func() {
+			defer GinkgoRecover()
+			_, message, err := websocketClientConn.ReadMessage()
 
-		err = client.Close()
-		Expect(err).ShouldNot(HaveOccurred())
+			Expect(err).ShouldNot(HaveOccurred())
+			messageChan <- string(message)
+		}()
+		ms.Emit(magicsockets.EmitOpts{
+			Rules: []magicsockets.EmitRule{
+				{
+					Keys: []string{newKey},
+				},
+			},
+		}, []byte(testMessage))
+		Eventually(messageChan).Should(Receive(&testMessage))
+
+		oldConnectionClient, ok := clients[key]
+		Expect(oldConnectionClient).To(BeNil())
+		Expect(ok).To(BeFalse())
 	})
 
 	It("Registers a client connection with a specific key and topic", func() {
@@ -99,10 +156,10 @@ var _ = Describe("Main", func() {
 			}, nil
 		})
 
-		client, err := newTestClient(address)
+		websocketClientConn, err = newWebsocketClientConn(address)
 		Expect(err).ToNot(HaveOccurred())
 
-		err = client.Close()
+		err = websocketClientConn.Close()
 		Expect(err).ShouldNot(HaveOccurred())
 
 		clients := ms.GetClients()
@@ -119,10 +176,10 @@ var _ = Describe("Main", func() {
 			}, nil
 		})
 
-		client, err := newTestClient(address)
+		websocketClientConn, err = newWebsocketClientConn(address)
 		Expect(err).ToNot(HaveOccurred())
 
-		err = client.Close()
+		err = websocketClientConn.Close()
 		Expect(err).ShouldNot(HaveOccurred())
 
 		clients := ms.GetClients()
@@ -131,7 +188,7 @@ var _ = Describe("Main", func() {
 		Expect(clients[key].GetTopics()).To(BeEquivalentTo(topics))
 
 		newTopics := []string{gofakeit.BuzzWord(), gofakeit.BuzzWord(), gofakeit.BuzzWord(), gofakeit.BuzzWord()}
-		clients[key].UpdateTopics(newTopics)
+		clients[key].SetTopics(newTopics)
 		Expect(clients[key].GetTopics()).To(BeEquivalentTo(newTopics))
 	})
 
@@ -150,7 +207,7 @@ var _ = Describe("Main", func() {
 			}, nil
 		})
 
-		client, err := newTestClient(address)
+		websocketClientConn, err = newWebsocketClientConn(address)
 		Expect(err).ToNot(HaveOccurred())
 
 		ms.Emit(magicsockets.EmitOpts{
@@ -163,7 +220,7 @@ var _ = Describe("Main", func() {
 
 		Eventually(<-outgoingTriggered).Should(BeTrue())
 
-		client.Close()
+		websocketClientConn.Close()
 	})
 
 	It("Triggers OnIncoming correctly", func() {
@@ -180,12 +237,10 @@ var _ = Describe("Main", func() {
 			}, nil
 		})
 
-		client, err := newTestClient(address)
+		websocketClientConn, err = newWebsocketClientConn(address)
 		Expect(err).ToNot(HaveOccurred())
 
-		client.WriteMessage(websocket.TextMessage, []byte("test message"))
+		websocketClientConn.WriteMessage(websocket.TextMessage, []byte("test message"))
 		Eventually(<-incomingTriggered).Should(BeTrue())
-
-		client.Close()
 	})
 })

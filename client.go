@@ -5,18 +5,25 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
+	"go.uber.org/zap"
 )
 
-type clientConn struct {
-	conn   *websocket.Conn
-	key    string
-	topics []string
+type client struct {
+	logger *zap.Logger
+
+	id  string
+	key string
 
 	onIncoming   func(messageType int, data []byte) error
 	onOutgoing   func(messageType int, data []byte) error
 	onPing       func() error
 	onDisconnect func() error
+
+	getServer func() *magicSocket
+
+	topics []string
 }
 
 type RegisterClientOpts struct {
@@ -29,15 +36,15 @@ type RegisterClientOpts struct {
 }
 
 type ClientConn interface {
-	WriteMessage(messageType int, data []byte) error
-	ReadMessage() (messageType int, p []byte, err error)
-
-	Close() error
-
 	GetKey() string
 	GetTopics() []string
+	Close() error
 
-	UpdateTopics([]string)
+	UpdateKey(string) error
+	SetTopics([]string)
+
+	WriteMessage(messageType int, data []byte) error
+	ReadMessage() (messageType int, p []byte, err error)
 }
 
 func (ms *magicSocket) registerClient(w http.ResponseWriter, r *http.Request, opts RegisterClientOpts) error {
@@ -61,65 +68,92 @@ func (ms *magicSocket) registerClient(w http.ResponseWriter, r *http.Request, op
 		return err
 	}
 
-	client := clientConn{
-		conn:         conn,
+	clientID := uuid.New().String()
+	logger := ms.logger.With(zap.String("Client ID", clientID))
+	client := client{
+		logger:       logger,
+		id:           clientID,
 		key:          opts.Key,
 		topics:       opts.Topics,
 		onIncoming:   opts.OnIncoming,
 		onOutgoing:   opts.OnOutgoing,
 		onPing:       opts.OnPing,
 		onDisconnect: opts.OnDisconnect,
+		getServer: func() *magicSocket {
+			return ms
+		},
 	}
 
-	ms.clients[opts.Key] = client
+	ms.connections[clientID] = conn
+	ms.clients[clientID] = &client
 
-	go ms.startOutgoingMessagesChannel(opts.Key, opts)
-	go ms.startIncomingMessagesChannel(opts.Key, opts)
+	go ms.startIncomingMessagesChannel(client.id, opts)
 
 	return nil
 }
 
-func (ms *magicSocket) UpdateClientKey(key string, newKey string) error {
+func (cc *client) UpdateKey(newKey string) error {
+	ms := cc.getServer()
 	ms.Lock()
 	defer ms.Unlock()
 
-	client, ok := ms.clients[key]
-	if !ok {
-		return fmt.Errorf("no client with key %s", key)
-	}
-
-	_, ok = ms.clients[newKey]
+	_, ok := ms.clientKeys[newKey]
 	if ok {
-		return fmt.Errorf("key %s already in use", key)
+		return fmt.Errorf("key %s already in use", newKey)
 	}
 
-	delete(ms.clients, key)
-	client.key = newKey
-	ms.clients[newKey] = client
+	delete(ms.clientKeys, cc.key)
+	cc.key = newKey
+	ms.clientKeys[newKey] = cc.id
 
 	return nil
 }
 
-func (cc *clientConn) GetKey() string {
+func (cc *client) SetTopics(topics []string) {
+	ms := cc.getServer()
+	ms.Lock()
+	defer ms.Unlock()
+
+	cc.topics = topics
+}
+
+func (cc *client) GetKey() string {
 	return cc.key
 }
 
-func (cc *clientConn) GetTopics() []string {
+func (cc *client) GetTopics() []string {
 	return cc.topics
 }
 
-func (cc *clientConn) UpdateTopics(newTopics []string) {
-	cc.topics = newTopics
+func (cc *client) Close() error {
+	ms := cc.getServer()
+	ms.Lock()
+	defer ms.Unlock()
+
+	cc.logger.Debug("Closing client connection")
+
+	if ms.connections[cc.id] != nil {
+		err := ms.connections[cc.id].Close()
+		if err != nil {
+			return err
+		}
+	}
+
+	delete(ms.connections, cc.id)
+	delete(ms.clients, cc.key)
+
+	cc = nil
+	return nil
 }
 
-func (cc *clientConn) WriteMessage(messageType int, data []byte) error {
-	return cc.conn.WriteMessage(messageType, data)
+// Sends a message to the client.
+func (cc *client) WriteMessage(messageType int, data []byte) error {
+	s := cc.getServer()
+	return s.connections[cc.id].WriteMessage(messageType, data)
 }
 
-func (cc *clientConn) ReadMessage() (messageType int, p []byte, err error) {
-	return cc.conn.ReadMessage()
-}
-
-func (cc *clientConn) Close() error {
-	return cc.conn.Close()
+// Consumes a message sent from the client.
+func (cc *client) ReadMessage() (messageType int, p []byte, err error) {
+	s := cc.getServer()
+	return s.connections[cc.id].ReadMessage()
 }

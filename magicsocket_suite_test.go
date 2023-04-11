@@ -33,7 +33,7 @@ func TestMagicsockets(t *testing.T) {
 	RunSpecs(t, "Magicsockets Suite")
 }
 
-func newTestClient(address string) (*websocket.Conn, error) {
+func newWebsocketClientConn(address string) (*websocket.Conn, error) {
 	u := url.URL{Scheme: "ws", Host: address, Path: "/"}
 	c, _, err := websocket.DefaultDialer.Dial(u.String(), nil)
 	if err != nil {

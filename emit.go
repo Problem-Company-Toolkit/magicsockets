@@ -37,7 +37,7 @@ func (ms *magicSocket) Emit(opts EmitOpts, message []byte) {
 		go func() {
 			messageType := websocket.TextMessage
 
-			logger := ms.logger.With(
+			logger := client.logger.With(
 				zap.String("Client Key", client.key),
 				zap.String("Message ID", uuid.New().String()),
 				zap.Int("Message Type", messageType),
@@ -45,13 +45,15 @@ func (ms *magicSocket) Emit(opts EmitOpts, message []byte) {
 
 			logger.Info("Emitting message")
 
-			err := client.conn.WriteMessage(messageType, message)
+			err := client.WriteMessage(messageType, message)
 			if err != nil {
 				logger.Error("Send message to client error", zap.Error(err))
+				return
 			}
 			if client.onOutgoing != nil {
 				if err := client.onOutgoing(messageType, message); err != nil {
 					logger.Error("onOutgoing error", zap.Error(err))
+					return
 				}
 			}
 		}()

@@ -2,12 +2,12 @@ package magicsockets
 
 import (
 	"fmt"
-	"log"
 	"net/http"
 	"strings"
 	"sync"
 
 	"github.com/google/uuid"
+	"github.com/gorilla/websocket"
 	"go.uber.org/zap"
 )
 
@@ -19,7 +19,6 @@ type MagicSocket interface {
 	Emit(opts EmitOpts, message []byte)
 
 	GetClients() map[string]ClientConn
-	UpdateClientKey(key string, newKey string) error
 
 	SetOnConnect(onConnectFunc)
 
@@ -34,7 +33,11 @@ type MagicSocket interface {
 type magicSocket struct {
 	logger *zap.Logger
 	sync.Mutex
-	clients map[string]clientConn
+
+	connections map[string]*websocket.Conn
+	clients     map[string]*client
+
+	clientKeys map[string]string
 
 	onConnect onConnectFunc
 
@@ -54,16 +57,22 @@ func New(opts MagicSocketOpts) MagicSocket {
 	)
 
 	return &magicSocket{
-		logger:    logger,
-		clients:   make(map[string]clientConn),
-		onConnect: opts.OnConnect,
-		port:      opts.Port,
+		logger:  logger,
+		clients: make(map[string]*client),
+
+		clientKeys: make(map[string]string),
+
+		connections: make(map[string]*websocket.Conn),
+		onConnect:   opts.OnConnect,
+		port:        opts.Port,
 	}
 }
 
-func (ms *magicSocket) connectionStillExists(key string) bool {
-	client, ok := ms.clients[key]
-	return ok && client.conn != nil
+func (ms *magicSocket) connectionStillExists(clientID string) bool {
+	client := ms.clients[clientID]
+	websocketConn := ms.connections[clientID]
+
+	return client != nil && websocketConn != nil
 }
 
 func (ms *magicSocket) SetOnConnect(onConnect onConnectFunc) {
@@ -75,27 +84,35 @@ func (ms *magicSocket) GetPort() int {
 }
 
 func (ms *magicSocket) GetClients() map[string]ClientConn {
+	ms.Lock()
+	defer ms.Unlock()
+
 	clients := make(map[string]ClientConn)
-	for k, v := range ms.clients {
-		clients[k] = &v
+	for _, v := range ms.clients {
+		clients[v.key] = v
 	}
 	return clients
 }
 
-func (ms *magicSocket) startOutgoingMessagesChannel(key string, opts RegisterClientOpts) {
+func (ms *magicSocket) startIncomingMessagesChannel(clientID string, opts RegisterClientOpts) {
+	// Make sure the client won't be updated while we're getting its reference.
+	ms.Lock()
+	client := ms.clients[clientID]
+	ms.Unlock()
+
+	logger := ms.logger.With(zap.String("Client ID", clientID))
+
 	defer func() {
 		recover()
-		ms.Lock()
-		delete(ms.clients, key)
-		ms.Unlock()
-		if opts.OnDisconnect != nil {
-			opts.OnDisconnect()
+		if ms.connectionStillExists(clientID) {
+			ms.clients[clientID].Close()
 		}
 	}()
 
-	conn := ms.clients[key].conn
-	for ms.connectionStillExists(key) {
-		_, _, err := conn.ReadMessage()
+	logger.Debug("Starting listening")
+	for ms.connectionStillExists(clientID) {
+		messageType, message, err := client.ReadMessage()
+		logger.Debug("Received incoming message")
 		if err != nil {
 			if strings.Contains(err.Error(), "close 1006") {
 				// ms.logger.Debug(
@@ -103,57 +120,27 @@ func (ms *magicSocket) startOutgoingMessagesChannel(key string, opts RegisterCli
 				// 	zap.Int("Code", 1006),
 				// 	zap.Error(err),
 				// )
-			} else if strings.Contains(err.Error(), "use of closed network connection") {
-
-			} else if strings.Contains(err.Error(), "reset by peer") {
-
+			} else if strings.Contains(err.Error(), "reset by peer") ||
+				strings.Contains(err.Error(), "use of closed network connection") {
+				client.Close()
 			} else {
-				ms.logger.Error("Read Error", zap.Error(err))
-			}
-			break
-		}
-	}
-}
-
-func (ms *magicSocket) startIncomingMessagesChannel(key string, opts RegisterClientOpts) {
-	defer func() {
-		recover()
-		if ms.connectionStillExists(key) {
-			ms.clients[key].conn.Close()
-		}
-	}()
-
-	conn := ms.clients[key].conn
-	client := ms.clients[key]
-	for ms.connectionStillExists(key) {
-		messageType, message, err := conn.ReadMessage()
-		if err != nil {
-			if strings.Contains(err.Error(), "close 1006") {
-				// ms.logger.Debug(
-				// 	"Connection closed unexpectedly",
-				// 	zap.Int("Code", 1006),
-				// 	zap.Error(err),
-				// )
-			} else if strings.Contains(err.Error(), "reset by peer") {
-
-			} else {
-				ms.logger.Error("Write Error", zap.Error(err))
+				logger.Error(
+					"Write Error",
+					zap.String("Message", string(message)),
+					zap.Error(err),
+				)
 			}
 			break
 		}
 
 		if client.onIncoming != nil {
 			if err := client.onIncoming(messageType, message); err != nil {
-				ms.logger.Error("client onIncoming error", zap.Error(err))
+				logger.Error("client onIncoming error", zap.Error(err))
 			}
 		}
-
-		err = conn.WriteMessage(messageType, message)
-		if err != nil {
-			log.Println("WriteMessage error:", err)
-			break
-		}
 	}
+
+	logger.Debug("Terminating listening")
 }
 
 // Blocks as long as the server is listening.
@@ -192,8 +179,22 @@ func (ms *magicSocket) Start() error {
 }
 
 func (ms *magicSocket) Stop() error {
-	if ms.server == nil {
+	if ms == nil || ms.server == nil {
 		return nil
+	}
+	ms.logger.Debug("Closing MagicSockets server and stopping all connections")
+
+	// We must add items to a slice
+	// Instead of directly closing them via the map
+	// Because you can't iterate over a map and make changes to it at the same time.
+	ms.Lock()
+	clientsToClose := []*client{}
+	for i := range ms.clients {
+		clientsToClose = append(clientsToClose, ms.clients[i])
+	}
+	ms.Unlock()
+	for i := range clientsToClose {
+		clientsToClose[i].Close()
 	}
 
 	return ms.server.Close()
