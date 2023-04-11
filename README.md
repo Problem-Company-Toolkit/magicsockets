@@ -1,86 +1,109 @@
-# MagicSocket
+# MagicSockets
 
-MagicSocket is a reusable and efficient WebSockets library designed to simplify the management of WebSocket clients and the sending and receiving of messages in your projects.
+MagicSockets is a simple yet powerful WebSocket library for Go that makes it easy to manage client connections, emit messages based on rules, and handle incoming and outgoing messages.
 
-## Why MagicSocket?
+## Features
 
-WebSockets play a crucial role in real-time applications by keeping users engaged and informed. MagicSocket was created to provide an easy-to-use and flexible solution for managing WebSocket clients and their messages, making it an ideal choice for any project that requires WebSockets.
+- Easy management of WebSocket client connections.
+- Key-based and topic-based client identification.
+- Emit messages to clients using rules for keys and topics.
+- Receive incoming messages and send outgoing messages through custom handlers.
+- Register and update client information easily.
 
-## What Can MagicSocket Do?
+## Installation
 
-MagicSocket offers the following features:
+To install MagicSockets, use the following command:
 
-- Effortless management of WebSocket clients
-- Simplified sending and receiving of messages
-- Seamless integration with projects that require WebSockets
-- User-friendly APIs
+```
+go get -u github.com/problem-company-toolkit/magicsockets
+```
 
-## Usage Examples
+## Usage
 
-### Creating a MagicSocket Instance
+### Starting the MagicSocket server
 
-To begin, create a new MagicSocket instance:
+```
+import (
+	"github.com/problem-company-toolkit/magicsockets"
+)
 
-```go
-import "github.com/problem-company-toolkit/magicsocket"
+func main() {
+	ms := magicsockets.New(magicsockets.MagicSocketOpts{
+		Port: 8080,
+	})
+	ms.Start() // Blocking
+}
+```
 
-socket := magicsockets.New(magicsockets.SocketOpts{
-    Port: 8080,
+### Connecting clients
+
+To connect a client to the MagicSocket server, simply initiate a standard WebSocket connection, like so:
+
+```
+const socket = new WebSocket("ws://localhost:8080");
+```
+
+### Emitting messages to clients
+
+The following will only send messages to clients that match all rules:
+
+```
+ms.Emit(magicsockets.EmitOpts{
+	Rules: []magicsockets.EmitRule{
+		{
+			Keys: []string{"clientKey1", "clientKey2"},
+		},
+		{
+			Topics: []string{"topic1", "topic2"},
+		},
+	},
+}, []byte("Hello, clients!"))
+```
+
+### Registering a websocket connection
+
+```
+ms.SetOnConnect(func(r *http.Request) (magicsockets.RegisterClientOpts, error) {
+	return magicsockets.RegisterClientOpts{
+		Key:    "clientKey",
+		Topics: []string{"topic1", "topic2"},
+		OnIncoming: func(messageType int, data []byte) error {
+			fmt.Printf("Received message: %s\n", string(data))
+			return nil
+		},
+		OnOutgoing: func(messageType int, data []byte) error {
+			fmt.Printf("Sending message: %s\n", string(data))
+			return nil
+		},
+	}, nil
 })
 ```
 
-### Handling Client Connections
+### Updating client information
 
-Register clients with MagicSocket using the `OnConnect` callback, which is called whenever a new client connects:
+MagicSockets support updating the abstract "client" that is connecting to the server.
 
-```go
-socket := magicsockets.New(magicsockets.SocketOpts{
-    Port: 8080,
-    OnConnect: func(r *http.Request) (magicsockets.RegisterClientOpts, error) {
-        // Perform any authentication or validation here.
+This way, you can have a single WebSocket connection, but change its identifier and topics according to your application's logic, without making any changes to the underlying WebSocket connection.
 
-        return magicsockets.RegisterClientOpts{
-            Key: "client-key", // Unique key to identify the client
-            Topics: []string{"topic1", "topic2"}, // Topics the client is interested in
-        }, nil
-    },
-})
+```
+client := ms.GetClients()["clientKey"]
+
+// Update client key
+client.UpdateKey("newClientKey")
+
+// Update client topics
+client.SetTopics([]string{"newTopic1", "newTopic2"})
 ```
 
-### Sending Messages
+Example of where you might want to use this:
 
-Send messages to clients by emitting events on specific topics:
+- Establishing one WebSocket connection per user. By manipulating the client key, you could set it to the user's ID once you receive an event that identifies the user.
+- You can further reuse the same connection if the user participates in other activities or stops participating within the same domain by simply updating the topics.
 
-```go
-socket.Emit(magicsockets.EmitOpts{
-    Rules: []magicsockets.EmitRule{
-        {
-            Topics: []string{"topic1"},
-            Key:    "client-key",
-        },
-    },
-}, []byte("Hello, users!"))
+## Running tests
+
+To run the tests, execute the following command in the terminal:
+
 ```
-
-### Receiving Messages
-
-Handle incoming messages from clients using the `OnIncoming` callback:
-
-```go
-socket := magicsockets.New(magicsockets.SocketOpts{
-    Port: 8080,
-    OnConnect: func(r *http.Request) (magicsockets.RegisterClientOpts, error) {
-        // Perform any authentication or validation here.
-
-        return magicsockets.RegisterClientOpts{
-            Key: "client-key", // Unique key to identify the client
-            Topics: []string{"topic1", "topic2"}, // Topics the client is interested in
-            OnIncoming: func(messageType int, data []byte) error {
-                // Handle the incoming message here.
-
-                return nil
-            },
-        }, nil
-    },
-})
+ginkgo
 ```
