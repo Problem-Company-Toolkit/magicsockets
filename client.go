@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
@@ -139,8 +140,15 @@ func (cc *client) Close() error {
 		}
 	}
 
+	if cc.onDisconnect != nil {
+		if err := cc.onDisconnect(); err != nil {
+			cc.logger.Error("Failed to process onDisconnect", zap.Error(err))
+		}
+	}
+
 	delete(ms.connections, cc.id)
-	delete(ms.clients, cc.key)
+	delete(ms.clients, cc.id)
+	delete(ms.clientKeys, cc.key)
 
 	cc = nil
 	return nil
@@ -149,6 +157,27 @@ func (cc *client) Close() error {
 // Sends a message to the client.
 func (cc *client) WriteMessage(messageType int, data []byte) error {
 	s := cc.getServer()
+	s.Lock()
+	defer func() {
+		val := recover()
+		if val != nil {
+			valString := fmt.Sprintf("%+v", val)
+			if strings.Contains(valString, "invalid memory address or nil pointer dereference") {
+				cc.logger.Debug("Client connection closed abruptly. Removing client...")
+				s.Unlock()
+				cc.Close()
+
+				return
+			}
+		}
+
+		s.Unlock()
+	}()
+
+	conn := s.connections[cc.id]
+	if conn == nil {
+		return fmt.Errorf("connection already closed")
+	}
 	return s.connections[cc.id].WriteMessage(messageType, data)
 }
 
