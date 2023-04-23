@@ -83,7 +83,7 @@ var _ = Describe("Main", func() {
 		ms.Emit(magicsockets.EmitOpts{
 			Rules: []magicsockets.EmitRule{
 				{
-					Keys: []string{key},
+					OnlyKeys: []string{key},
 				},
 			},
 		}, []byte(testMessage))
@@ -137,7 +137,7 @@ var _ = Describe("Main", func() {
 		ms.Emit(magicsockets.EmitOpts{
 			Rules: []magicsockets.EmitRule{
 				{
-					Keys: []string{newKey},
+					OnlyKeys: []string{newKey},
 				},
 			},
 		}, []byte(testMessage))
@@ -213,7 +213,7 @@ var _ = Describe("Main", func() {
 		ms.Emit(magicsockets.EmitOpts{
 			Rules: []magicsockets.EmitRule{
 				{
-					Keys: []string{key},
+					OnlyKeys: []string{key},
 				},
 			},
 		}, []byte(testMessage))
@@ -242,5 +242,41 @@ var _ = Describe("Main", func() {
 
 		websocketClientConn.WriteMessage(websocket.TextMessage, []byte("test message"))
 		Eventually(<-incomingTriggered).Should(BeTrue())
+	})
+
+	It("Correctly cleans up a client that had its key updated", func() {
+		ms.SetOnConnect(func(r *http.Request) (magicsockets.RegisterClientOpts, error) {
+			return magicsockets.RegisterClientOpts{
+				Key:    key,
+				Topics: topics,
+			}, nil
+		})
+
+		websocketClientConn, err = newWebsocketClientConn(address)
+		Expect(err).ToNot(HaveOccurred())
+
+		client, ok := ms.GetClients()[key]
+		Expect(ok).To(BeTrue())
+
+		newKey := gofakeit.UUID()
+		err = client.UpdateKey(newKey)
+		Expect(err).ShouldNot(HaveOccurred())
+
+		err = client.UpdateKey(newKey)
+		Expect(err).Should(HaveOccurred())
+
+		err = client.Close()
+		Expect(err).ShouldNot(HaveOccurred())
+		err = client.Close()
+		Expect(err).ShouldNot(HaveOccurred())
+
+		websocketClientConn, err = newWebsocketClientConn(address)
+		Expect(err).ToNot(HaveOccurred())
+
+		client, ok = ms.GetClients()[key]
+		Expect(ok).To(BeTrue())
+
+		err = client.UpdateKey(newKey)
+		Expect(err).ShouldNot(HaveOccurred())
 	})
 })

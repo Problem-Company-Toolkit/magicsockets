@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"sync"
 
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
@@ -12,6 +13,7 @@ import (
 )
 
 type client struct {
+	mutex  *sync.Mutex
 	logger *zap.Logger
 
 	id  string
@@ -37,8 +39,10 @@ type RegisterClientOpts struct {
 }
 
 type ClientConn interface {
+	GetID() string
 	GetKey() string
 	GetTopics() []string
+
 	Close() error
 
 	UpdateKey(string) error
@@ -49,8 +53,8 @@ type ClientConn interface {
 }
 
 func (ms *magicSocket) registerClient(w http.ResponseWriter, r *http.Request, opts RegisterClientOpts) error {
-	ms.Lock()
-	defer ms.Unlock()
+	ms.mutex.Lock()
+	defer ms.mutex.Unlock()
 
 	if _, ok := ms.clients[opts.Key]; ok {
 		return errors.New("client already registered")
@@ -72,6 +76,7 @@ func (ms *magicSocket) registerClient(w http.ResponseWriter, r *http.Request, op
 	clientID := uuid.New().String()
 	logger := ms.logger.With(zap.String("Client ID", clientID))
 	client := client{
+		mutex:        &sync.Mutex{},
 		logger:       logger,
 		id:           clientID,
 		key:          opts.Key,
@@ -95,8 +100,8 @@ func (ms *magicSocket) registerClient(w http.ResponseWriter, r *http.Request, op
 
 func (cc *client) UpdateKey(newKey string) error {
 	ms := cc.getServer()
-	ms.Lock()
-	defer ms.Unlock()
+	ms.mutex.Lock()
+	defer ms.mutex.Unlock()
 
 	_, ok := ms.clientKeys[newKey]
 	if ok {
@@ -112,8 +117,8 @@ func (cc *client) UpdateKey(newKey string) error {
 
 func (cc *client) SetTopics(topics []string) {
 	ms := cc.getServer()
-	ms.Lock()
-	defer ms.Unlock()
+	ms.mutex.Lock()
+	defer ms.mutex.Unlock()
 
 	cc.topics = topics
 }
@@ -122,20 +127,26 @@ func (cc *client) GetKey() string {
 	return cc.key
 }
 
+func (cc *client) GetID() string {
+	return cc.id
+}
+
 func (cc *client) GetTopics() []string {
 	return cc.topics
 }
 
 func (cc *client) Close() error {
 	ms := cc.getServer()
-	ms.Lock()
-	defer ms.Unlock()
+
+	ms.mutex.Lock()
+	defer ms.mutex.Unlock()
 
 	cc.logger.Debug("Closing client connection")
 
 	if ms.connections[cc.id] != nil {
 		err := ms.connections[cc.id].Close()
 		if err != nil {
+			cc.logger.Error("Failed to close client connection", zap.Error(err))
 			return err
 		}
 	}
@@ -156,29 +167,29 @@ func (cc *client) Close() error {
 
 // Sends a message to the client.
 func (cc *client) WriteMessage(messageType int, data []byte) error {
-	s := cc.getServer()
-	s.Lock()
+	cc.mutex.Lock()
+	defer cc.mutex.Unlock()
+
 	defer func() {
 		val := recover()
 		if val != nil {
 			valString := fmt.Sprintf("%+v", val)
 			if strings.Contains(valString, "invalid memory address or nil pointer dereference") {
 				cc.logger.Debug("Client connection closed abruptly. Removing client...")
-				s.Unlock()
 				cc.Close()
 
 				return
 			}
 		}
 
-		s.Unlock()
 	}()
 
-	conn := s.connections[cc.id]
+	ms := cc.getServer()
+	conn := ms.connections[cc.id]
 	if conn == nil {
 		return fmt.Errorf("connection already closed")
 	}
-	return s.connections[cc.id].WriteMessage(messageType, data)
+	return ms.connections[cc.id].WriteMessage(messageType, data)
 }
 
 // Consumes a message sent from the client.
