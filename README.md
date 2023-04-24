@@ -14,7 +14,7 @@ MagicSockets is a simple yet powerful WebSocket library for Go that makes it eas
 
 To install MagicSockets, use the following command:
 
-```
+```go
 go get -u github.com/problem-company-toolkit/magicsockets
 ```
 
@@ -22,7 +22,7 @@ go get -u github.com/problem-company-toolkit/magicsockets
 
 ### Starting the MagicSocket server
 
-```
+```go
 import (
 	"github.com/problem-company-toolkit/magicsockets"
 )
@@ -39,7 +39,7 @@ func main() {
 
 To connect a client to the MagicSocket server, simply initiate a standard WebSocket connection, like so:
 
-```
+```go
 const socket = new WebSocket("ws://localhost:8080");
 ```
 
@@ -47,7 +47,7 @@ const socket = new WebSocket("ws://localhost:8080");
 
 The following will only send messages to clients that match all rules:
 
-```
+```go
 ms.Emit(magicsockets.EmitOpts{
 	Rules: []magicsockets.EmitRule{
 		{
@@ -68,7 +68,7 @@ You can update this hook function after the server has already started, but clie
 
 In this hook, you can define other hooks for when messages are received, sent, clients are connected, disconnected, etc.
 
-```
+```go
 ms.SetOnConnect(func(r *http.Request) (magicsockets.RegisterClientOpts, error) {
 	return magicsockets.RegisterClientOpts{
 		Key:    "clientKey",
@@ -91,7 +91,7 @@ MagicSockets support updating the abstract "client" that is connecting to the se
 
 This way, you can have a single WebSocket connection, but change its identifier and topics according to your application's logic, without making any changes to the underlying WebSocket connection.
 
-```
+```go
 client := ms.GetClients()["clientKey"]
 
 // Update client key
@@ -129,6 +129,6 @@ If the log level is set to `debug`, then the server will output when it's emitti
 
 To run the tests, execute the following command in the terminal:
 
-```
+```go
 ginkgo
 ```
