@@ -108,7 +108,24 @@ Situations where you might want to use this:
 - Subscribing or unsubscribing the user whenever they engage or stop certain activities within the same domain.
     - This is particularly useful if you're using a PubSub solution. You can easily translate the concept of `topics` by simply syncing consuming events and producing events with your current messaging broker.
 
-## Running tests
+### Configuring logger using environment variable
+
+Set the log level using the environment variable `MAGICSOCKETS_LOG_LEVEL`. Supported log levels are:
+
+- `debug`
+- `info`
+- `warn`
+- `fatal`
+- `panic`
+- `dpanic`
+
+If an invalid log level is provided, the default log level (`WarnLevel`) will be used.
+
+The package uses a default log level of `WarnLevel` and a default log encoding of `console`.
+
+If the log level is set to `debug`, then the server will output when it's emitting messages, closing clients, receiving and sending messages (including the contents of the messages), etc.
+
+# Testing
 
 To run the tests, execute the following command in the terminal:
 

@@ -216,7 +216,7 @@ func (ms *magicSocket) startIncomingMessagesChannel(clientID string, opts Regist
 	logger.Debug("Starting listening")
 	for client != nil {
 		messageType, message, err := client.ReadMessage()
-		logger.Info("Received incoming message", zap.String("Message", string(message)))
+		logger.Debug("Received incoming message", zap.String("Message", string(message)))
 		if err != nil {
 			logger.Error("Error receiving message", zap.Error(err))
 

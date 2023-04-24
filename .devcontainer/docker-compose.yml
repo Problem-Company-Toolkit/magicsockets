@@ -1,0 +1,50 @@
+version: '3.8'
+
+volumes:
+  postgres-data:
+    null
+  rabbitmq-data:
+    null
+
+networks:
+  magicsockets:
+    name: magicsockets
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        # [Choice] Go version 1, 1.18, 1.17
+        # Append -bullseye or -buster to pin to an OS version.
+        # Use -bullseye variants on local arm64/Apple Silicon.
+        VARIANT: "1.19-bullseye"
+        # Options
+        NODE_VERSION: "16"
+    env_file:
+      # Ensure that the variables in .env match the same variables in devcontainer.json
+      - .env
+
+    volumes:
+      - ..:/workspace/magicsockets:cached
+
+    # Overrides default command so things don't shut down after the process ends.
+    command: sleep infinity
+
+    networks:
+      - magicsockets
+
+  rabbitmq:
+    image: rabbitmq:3.9.29-management-alpine
+    restart: unless-stopped
+    ports:
+      - ${RABBITMQ_FORWARD_PORT}:${RABBITMQ_PORT}
+      - ${RABBITMQ_ADMIN_FORWARD_PORT}:${RABBITMQ_ADMIN_PORT}
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq/data
+    networks:
+      - magicsockets
+    environment:
+      - RABBITMQ_DEFAULT_USER=${RABBITMQ_DEFAULT_USER}
+      - RABBITMQ_DEFAULT_PASS=${RABBITMQ_DEFAULT_PASS}

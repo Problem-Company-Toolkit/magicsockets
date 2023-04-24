@@ -24,6 +24,7 @@ func (ms *magicSocket) Emit(opts EmitOpts, message []byte) {
 	ms.logger.Debug(
 		"Starting emit message processing",
 		zap.String("Options", fmt.Sprintf("%s", opts)),
+		zap.String("Message", string(message)),
 	)
 
 	targets := make(map[string]*client)
