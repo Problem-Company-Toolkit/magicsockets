@@ -1,11 +1,5 @@
 version: '3.8'
 
-volumes:
-  postgres-data:
-    null
-  rabbitmq-data:
-    null
-
 networks:
   magicsockets:
     name: magicsockets
@@ -34,17 +28,3 @@ services:
 
     networks:
       - magicsockets
-
-  rabbitmq:
-    image: rabbitmq:3.9.29-management-alpine
-    restart: unless-stopped
-    ports:
-      - ${RABBITMQ_FORWARD_PORT}:${RABBITMQ_PORT}
-      - ${RABBITMQ_ADMIN_FORWARD_PORT}:${RABBITMQ_ADMIN_PORT}
-    volumes:
-      - rabbitmq-data:/var/lib/rabbitmq/data
-    networks:
-      - magicsockets
-    environment:
-      - RABBITMQ_DEFAULT_USER=${RABBITMQ_DEFAULT_USER}
-      - RABBITMQ_DEFAULT_PASS=${RABBITMQ_DEFAULT_PASS}
