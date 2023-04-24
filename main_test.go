@@ -193,7 +193,8 @@ var _ = Describe("Main", func() {
 	})
 
 	It("Triggers OnOutgoing correctly", func() {
-		outgoingTriggered := make(chan bool)
+		outgoingTriggered := make(chan bool, 1)
+		expected := true
 
 		testMessage := "my test message 123"
 		ms.SetOnConnect(func(r *http.Request) (magicsockets.RegisterClientOpts, error) {
@@ -201,7 +202,7 @@ var _ = Describe("Main", func() {
 				Key:    key,
 				Topics: topics,
 				OnOutgoing: func(messageType int, data []byte) error {
-					outgoingTriggered <- true
+					outgoingTriggered <- expected
 					return nil
 				},
 			}, nil
@@ -218,7 +219,7 @@ var _ = Describe("Main", func() {
 			},
 		}, []byte(testMessage))
 
-		Eventually(<-outgoingTriggered).Should(BeTrue())
+		Eventually(outgoingTriggered).Should(Receive(&expected))
 
 		websocketClientConn.Close()
 	})

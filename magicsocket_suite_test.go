@@ -22,7 +22,7 @@ var (
 		if isUsingDebugger {
 			return 100000000 * time.Second
 		} else {
-			return 5 * time.Second
+			return 3 * time.Second
 		}
 	}()
 )
